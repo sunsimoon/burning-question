@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Find Your Burning Question</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .animate-spin {
+      animation: spin 1s linear infinite;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-b from-slate-50 to-slate-100">
+  <div id="app" class="min-h-screen p-4">
+    <div class="max-w-3xl mx-auto py-8">
+      <!-- Header -->
+      <div class="text-center mb-12">
+        <h1 class="text-3xl font-light text-slate-800 mb-2">Find Your Burning Question</h1>
+        <p class="text-slate-600">A space to discover what's really asking to be explored</p>
+      </div>
+
+      <!-- Progress Bar -->
+      <div id="progress-bar" class="mb-8"></div>
+
+      <!-- Main Content -->
+      <div id="main-content" class="bg-white rounded-lg shadow-sm p-8 mb-6"></div>
+
+      <!-- Navigation -->
+      <div id="navigation" class="flex justify-between"></div>
+    </div>
+  </div>
+
+  <script>
+    // SVG Icons
+    const icons = {
+      chevronLeft: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>',
+      chevronRight: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>',
+      loader: '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>',
+      clock: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>'
+    };
+
+    // State
+    let state = {
+      step: 0,
+      responses: {
+        brainDump: '',
+        paragraph: '',
+        whyMatters: '',
+        underneath: '',
+        oneSentence: '',
+        finalReflection: ''
+      },
+      claudeObservation: '',
+      loading: false,
+      showObservation: false,
+      completedSteps: [],
+      clickCheck: null,
+      refinementCount: 0,
+      refinementResponse: '',
+      showRefinementInput: false,
+      previousObservations: [],
+      showFinalOptions: false,
+      timerMinutes: null,
+      timeRemaining: 0,
+      timerActive: false,
+      timerInterval: null
+    };
+
+    const steps = [
+      { title: 'Brain Dump', key: 'brainDump' },
+      { title: 'One Paragraph', key: 'paragraph' },
+      { title: 'Why It Matters', key: 'whyMatters' },
+      { title: "What's Underneath", key: 'underneath' },
+      { title: 'One Sentence', key: 'oneSentence' },
+      { title: 'Reflection', key: 'finalReflection' }
+    ];
+
+    const prompts = {
+      brainDump: "What's the issue or question that's pulling at your attention right now? Set a timer if it helps, and just let everything flow without editing. All of it belongs here.",
+      paragraph: "Now, looking at everything you've written, distill it down to one paragraph. What's the core of what you're expressing?",
+      whyMatters: "Why does this matter to you? What makes this important enough to explore?",
+      underneath: "What's underneath that? If you could step back from the surface concerns, what's the deeper question here?",
+      oneSentence: "Based on everything you've explored, what is your burning question? Capture it in one clear sentence.",
+      finalReflection: "Now that you have your question, sit with it for a moment. What does holding this question open up for you? What does it shed light on?"
+    };
+
+    // Timer functions
+    function startTimer(minutes) {
+      state.timerMinutes = minutes;
+      state.timeRemaining = minutes * 60;
+      state.timerActive = true;
+      
+      if (state.timerInterval) clearInterval(state.timerInterval);
+      state.timerInterval = setInterval(() => {
+        if (state.timeRemaining > 0) {
+          state.timeRemaining--;
+          render();
+        } else {
+          state.timerActive = false;
+          clearInterval(state.timerInterval);
+          render();
+        }
+      }, 1000);
+      
+      render();
+    }
+
+    function stopTimer() {
+      state.timerActive = false;
+      if (state.timerInterval) clearInterval(state.timerInterval);
+      render();
+    }
+
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    // API functions
+    async function getClaudeObservation() {
+      state.loading = true;
+      render();
+
+      const currentKey = steps[state.step].key;
+      const contextParts = [];
+      Object.entries(state.responses).forEach(([key, value]) => {
+        if (value && key !== 'finalReflection') {
+          contextParts.push(`${key}: ${value}`);
+        }
+      });
+      const fullContext = contextParts.join('\\n\\n');
+
+      let systemPrompt = '';
+      if (state.step === 2) {
+        systemPrompt = `You're helping someone find their burning question. You've seen their initial exploration. Now they're explaining why this matters. Read everything and offer ONE observation about what pattern you're noticing - not a question, but a gentle reflection of what seems to be at the heart of this. 2-3 sentences max. Focus on what's underneath the surface concern.`;
+      } else if (state.step === 3) {
+        systemPrompt = `You're helping someone go deeper into their burning question. They've shared their exploration and why it matters. Now they're trying to name what's underneath. Offer ONE observation about what you're hearing beneath their words - a reframe or reflection that might help them see it more clearly. 2-3 sentences max. Be direct but gentle.`;
+      } else if (state.step === 4) {
+        systemPrompt = `You're helping someone distill their burning question to one sentence. You've seen their whole journey. Looking at their attempt to capture it in one sentence, offer ONE observation: Does it feel like a real question or a solution in disguise? Is it getting to the essence of what they've been exploring? Does it align with the patterns you've seen? 2-3 sentences max.`;
+      } else if (state.step === 5) {
+        systemPrompt = `Someone has found their burning question and is now reflecting on what it opens up or sheds light on. You've seen their entire journey. Offer ONE observation about what this question might illuminate for them, or what it reveals about what they're really seeking. 2-3 sentences max. Be thoughtful and generative.`;
+      }
+
+      const userPrompt = `Full context so far:\\n${fullContext}\\n\\nOffer your observation:`;
+
+      try {
+        console.log('Making API call for step:', state.step, steps[state.step].title);
+        console.log('System prompt exists:', !!systemPrompt);
+        
+        const response = await fetch('/.netlify/functions/claude-proxy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 500,
+            messages: [
+              { role: 'user', content: `${systemPrompt}\\n\\n${userPrompt}` }
+            ]
+          })
+        });
+
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('API error response:', errorText);
+          throw new Error(`API returned ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log('API response received:', data);
+        
+        if (!data.content || !data.content[0] || !data.content[0].text) {
+          console.error('Unexpected response structure:', data);
+          throw new Error('Invalid response structure');
+        }
+        
+        const observation = data.content[0].text.trim();
+        state.claudeObservation = observation;
+        state.previousObservations = [observation];
+        state.showObservation = true;
+      } catch (error) {
+        console.error('Error getting observation:', error);
+        console.error('Error details:', {
+          message: error.message,
+          step: state.step,
+          stepTitle: steps[state.step].title,
+          hasSystemPrompt: !!systemPrompt
+        });
+        state.claudeObservation = `I ran into an issue generating the observation. Please try again. (Error: ${error.message})`;
+        state.showObservation = true;
+      }
+
+      state.loading = false;
+      render();
+    }
+
+    async function refineObservation() {
+      if (state.refinementCount >= 3) return;
+      
+      state.loading = true;
+      render();
+
+      const contextParts = [];
+      Object.entries(state.responses).forEach(([key, value]) => {
+        if (value && key !== 'finalReflection') {
+          contextParts.push(`${key}: ${value}`);
+        }
+      });
+      const fullContext = contextParts.join('\\n\\n');
+
+      const observationHistory = state.previousObservations.map((obs, i) => 
+        `Observation ${i + 1}: ${obs}`
+      ).join('\\n\\n');
+
+      const systemPrompt = `You're helping someone find their burning question. They received an observation and have provided feedback on it. Read their feedback carefully and provide a REFINED observation that takes their input seriously.
+
+Full context:
+${fullContext}
+
+${observationHistory}
+
+Their feedback on your observation:
+"${state.refinementResponse}"
+
+Provide a refined observation (2-3 sentences max) that:
+- Acknowledges what they said
+- Adjusts based on their correction or clarification
+- Goes deeper in the direction they're pointing you
+- Stays grounded and specific
+
+Be responsive to their feedback.`;
+
+      try {
+        const response = await fetch('/.netlify/functions/claude-proxy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 500,
+            messages: [
+              { role: 'user', content: systemPrompt }
+            ]
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`API returned ${response.status}`);
+        }
+
+        const data = await response.json();
+        const refinedObservation = data.content[0].text.trim();
+        state.claudeObservation = refinedObservation;
+        state.previousObservations.push(refinedObservation);
+        state.refinementCount++;
+        state.refinementResponse = '';
+        state.showRefinementInput = false;
+      } catch (error) {
+        console.error('Error refining observation:', error);
+      }
+
+      state.loading = false;
+      render();
+    }
+
+    // Navigation functions
+    function handleNext() {
+      if (state.step < steps.length - 1) {
+        if (!state.completedSteps.includes(state.step)) {
+          state.completedSteps.push(state.step);
+        }
+        state.step++;
+        resetStepState();
+        render();
+      }
+    }
+
+    function handleBack() {
+      if (state.step > 0) {
+        state.step--;
+        resetStepState();
+        render();
+      }
+    }
+
+    function jumpToStep(targetStep) {
+      if (state.completedSteps.includes(targetStep) || targetStep < state.step) {
+        state.step = targetStep;
+        resetStepState();
+        render();
+      }
+    }
+
+    function resetStepState() {
+      state.claudeObservation = '';
+      state.showObservation = false;
+      state.clickCheck = null;
+      state.refinementCount = 0;
+      state.refinementResponse = '';
+      state.showRefinementInput = false;
+      state.previousObservations = [];
+    }
+
+    function handleClickCheck(response) {
+      state.clickCheck = response;
+      if (response === 'yes') {
+        if (!state.completedSteps.includes(state.step)) {
+          state.completedSteps.push(state.step);
+        }
+        state.step = 5;
+        resetStepState();
+      }
+      render();
+    }
+
+    function handleTextChange(value) {
+      const currentKey = steps[state.step].key;
+      state.responses[currentKey] = value;
+      // Don't re-render on every keystroke - just update state
+      // Only re-render when buttons need to enable/disable
+    }
+
+    function sendEmail() {
+      const subject = encodeURIComponent("My Burning Question");
+      const body = encodeURIComponent(`Hi Simon,
+
+I just completed the Find Your Burning Question tool and wanted to share my journey with you.
+
+---
+
+MY BURNING QUESTION:
+${state.responses.oneSentence}
+
+${state.responses.finalReflection ? `WHAT THIS OPENS UP:
+${state.responses.finalReflection}
+
+` : ''}---
+
+MY JOURNEY:
+
+Brain Dump:
+${state.responses.brainDump}
+
+Core Paragraph:
+${state.responses.paragraph}
+
+Why It Matters:
+${state.responses.whyMatters}
+
+What's Underneath:
+${state.responses.underneath}
+
+---
+
+I'm interested in exploring this further. Looking forward to hearing from you.
+
+`);
+      
+      window.location.href = `mailto:simonberkowitz@gmail.com?subject=${subject}&body=${body}`;
+    }
+
+    // Render functions
+    function renderProgressBar() {
+      const currentKey = steps[state.step].key;
+      const currentResponse = state.responses[currentKey];
+      const canProgress = currentResponse.trim().length > 0;
+
+      return `
+        <div class="flex justify-between mb-2">
+          ${steps.map((s, i) => `
+            <button
+              onclick="jumpToStep(${i})"
+              ${(!state.completedSteps.includes(i) && i > state.step) ? 'disabled' : ''}
+              class="flex-1 text-center transition-colors ${
+                state.completedSteps.includes(i) || i <= state.step
+                  ? 'cursor-pointer hover:text-slate-900'
+                  : 'cursor-not-allowed opacity-40'
+              }"
+            >
+              <div class="text-xs ${i === state.step ? 'text-slate-900 font-bold' : i <= state.step || state.completedSteps.includes(i) ? 'text-slate-700 font-medium' : 'text-slate-400'}">
+                ${s.title}
+              </div>
+            </button>
+          `).join('')}
+        </div>
+        <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
+          <div 
+            class="h-full bg-slate-600 transition-all duration-500 ease-out"
+            style="width: ${((state.step + 1) / steps.length) * 100}%"
+          ></div>
+        </div>
+      `;
+    }
+
+    function renderMainContent() {
+      const currentKey = steps[state.step].key;
+      const currentResponse = state.responses[currentKey];
+      const canGetObservation = currentResponse.trim().length > 20 && [2, 3, 4, 5].includes(state.step);
+
+      if (state.step === 5 && state.showFinalOptions) {
+        return `
+          <div class="space-y-6">
+            <div class="p-6 bg-slate-50 rounded-lg border-2 border-slate-200">
+              <p class="text-lg text-slate-800 leading-relaxed font-light mb-4">
+                ${state.responses.oneSentence}
+              </p>
+              ${state.responses.finalReflection ? `
+                <p class="text-slate-600 leading-relaxed border-t border-slate-200 pt-4 mt-4">
+                  ${state.responses.finalReflection}
+                </p>
+              ` : ''}
+            </div>
+
+            <div class="p-6 bg-green-50 rounded-lg border border-green-200">
+              <h3 class="text-lg font-medium text-green-900 mb-4">You've found your burning question</h3>
+              <p class="text-green-800 mb-6">This is the starting point for deeper exploration. You can take this question into your life, your journaling, your conversations - and see what unfolds.</p>
+              
+              <div class="space-y-3">
+                <button
+                  onclick="sendEmail()"
+                  class="w-full px-6 py-3 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
+                >
+                  Send my journey to Simon
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <h2 class="text-xl font-light text-slate-800 mb-4">${steps[state.step].title}</h2>
+        <p class="text-slate-600 mb-6 leading-relaxed">${prompts[currentKey]}</p>
+
+        ${state.step === 0 && !state.timerActive ? `
+          <div class="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <p class="text-sm text-slate-600 mb-3">Optional: Set a timer to help you stay in the flow</p>
+            <div class="flex gap-2">
+              ${[5, 10, 15, 20].map(min => `
+                <button
+                  onclick="startTimer(${min})"
+                  class="px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition-colors text-sm"
+                >
+                  ${min} min
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        ${state.timerActive && state.step === 0 ? `
+          <div class="mb-4 p-3 bg-slate-100 rounded-lg border border-slate-300 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              ${icons.clock}
+              <span class="text-slate-700 font-mono">${formatTime(state.timeRemaining)}</span>
+            </div>
+            <button
+              onclick="stopTimer()"
+              class="text-sm text-slate-600 hover:text-slate-800"
+            >
+              Stop
+            </button>
+          </div>
+        ` : ''}
+
+        <textarea
+          oninput="handleTextChange(this.value)"
+          onblur="render()"
+          class="w-full h-48 p-4 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 resize-none"
+          placeholder="Take your time..."
+        >${currentResponse}</textarea>
+
+        ${canGetObservation && !state.showObservation ? `
+          <button
+            onclick="getClaudeObservation()"
+            ${state.loading ? 'disabled' : ''}
+            class="mt-4 px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            ${state.loading ? `
+              ${icons.loader}
+              Reflecting...
+            ` : 'What are you noticing?'}
+          </button>
+        ` : ''}
+
+        ${state.showObservation && state.claudeObservation ? `
+          <div class="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <p class="text-slate-700 leading-relaxed mb-4">${state.claudeObservation}</p>
+            
+            ${!state.showRefinementInput ? `
+              <div class="flex gap-2 flex-wrap">
+                <button
+                  onclick="state.showObservation = false; render();"
+                  class="px-4 py-2 text-sm bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition-colors"
+                >
+                  Revise my text
+                </button>
+                ${state.refinementCount < 3 ? `
+                  <button
+                    onclick="state.showRefinementInput = true; render();"
+                    class="px-4 py-2 text-sm bg-slate-600 text-white rounded hover:bg-slate-700 transition-colors"
+                  >
+                    Respond to this observation
+                  </button>
+                ` : ''}
+                <button
+                  onclick="state.showObservation = false; state.claudeObservation = ''; render();"
+                  class="px-4 py-2 text-sm bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition-colors"
+                >
+                  Try again
+                </button>
+              </div>
+            ` : `
+              <div>
+                <textarea
+                  oninput="state.refinementResponse = this.value;"
+                  onblur="render()"
+                  class="w-full h-32 p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 resize-none mb-3 text-sm"
+                  placeholder="What about this observation lands or doesn't land for you? (e.g., 'You're close but it's more about X than Y')"
+                >${state.refinementResponse}</textarea>
+                <div class="flex gap-2 items-center flex-wrap">
+                  <button
+                    onclick="refineObservation()"
+                    ${state.loading || !state.refinementResponse.trim() ? 'disabled' : ''}
+                    class="px-4 py-2 text-sm bg-slate-600 text-white rounded hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    ${state.loading ? `
+                      ${icons.loader}
+                      Refining...
+                    ` : 'Refine observation'}
+                  </button>
+                  <button
+                    onclick="state.showRefinementInput = false; state.refinementResponse = ''; render();"
+                    class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <span class="text-xs text-slate-400 ml-auto">
+                    Refinements left: ${3 - state.refinementCount}
+                  </span>
+                </div>
+              </div>
+            `}
+          </div>
+        ` : ''}
+
+        ${state.step === 4 && currentResponse.trim().length > 0 ? `
+          <div class="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <p class="text-slate-600 mb-4">Does this feel true, or are you performing?</p>
+            <div class="flex gap-3">
+              <button
+                onclick="handleClickCheck('yes')"
+                class="flex-1 px-6 py-3 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
+              >
+                This feels right
+              </button>
+              <button
+                onclick="handleClickCheck('unsure')"
+                class="flex-1 px-6 py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors"
+              >
+                Something's still off
+              </button>
+            </div>
+
+            ${state.clickCheck === 'unsure' ? `
+              <div class="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                <p class="text-amber-900 text-sm">That's valuable to notice. You can revise here or jump back to any earlier step using the progress bar above.</p>
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+
+        ${state.step === 5 && currentResponse.trim().length > 0 && !state.showFinalOptions ? `
+          <button
+            onclick="state.showFinalOptions = true; render();"
+            class="mt-6 w-full px-6 py-3 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
+          >
+            Complete
+          </button>
+        ` : ''}
+      `;
+    }
+
+    function renderNavigation() {
+      if (state.step === 5) return '';
+
+      const currentKey = steps[state.step].key;
+      const currentResponse = state.responses[currentKey];
+      const canProgress = currentResponse.trim().length > 0;
+
+      return `
+        <button
+          onclick="handleBack()"
+          ${state.step === 0 ? 'disabled' : ''}
+          class="px-6 py-2 text-slate-600 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          ${icons.chevronLeft}
+          Back
+        </button>
+        
+        ${state.step !== 4 ? `
+          <button
+            onclick="handleNext()"
+            ${!canProgress ? 'disabled' : ''}
+            class="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+          >
+            Continue
+            ${icons.chevronRight}
+          </button>
+        ` : ''}
+      `;
+    }
+
+    function render() {
+      document.getElementById('progress-bar').innerHTML = renderProgressBar();
+      document.getElementById('main-content').innerHTML = renderMainContent();
+      document.getElementById('navigation').innerHTML = renderNavigation();
+    }
+
+    // Initial render
+    render();
+  </script>
+</body>
+</html>
