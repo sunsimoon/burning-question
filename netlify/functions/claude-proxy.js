@@ -1,3 +1,5 @@
+const fetch = require('node-fetch');
+
 exports.handler = async function(event, context) {
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
@@ -26,6 +28,7 @@ exports.handler = async function(event, context) {
   // Check for API key
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
+    console.log('API key not found in environment variables');
     return {
       statusCode: 500,
       headers: {
