@@ -1,0 +1,8 @@
+{
+  "name": "burning-question",
+  "version": "1.0.0",
+  "description": "Find Your Burning Question tool",
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  }
+}
