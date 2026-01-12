@@ -694,22 +694,23 @@
             button.disabled = true;
             
             try {
-                const response = await fetch('/.netlify/functions/get-observation', {
+                const response = await fetch('/.netlify/functions/claude-proxy', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        step: currentStep,
-                        stepTitle: STEPS[currentStep - 1].title,
-                        currentResponse: document.getElementById('response-input').value,
-                        previousResponses: responses,
-                        previousObservations: aiObservations
-                    })
+    model: 'claude-3-5-sonnet-20241022',
+    max_tokens: 300,
+    messages: [{
+        role: 'user',
+        content: `Previous observation: ${aiObservations[currentStep]}\n\nUser wants to refine with: ${refinementText}\n\nProvide a refined observation based on this feedback.`
+    }]
+})
                 });
                 
                 if (!response.ok) throw new Error('Failed to get observation');
                 
                 const data = await response.json();
-                aiObservations[currentStep] = data.observation;
+                aiObservations[currentStep] = data.content[0].text;
                 
                 document.getElementById('ai-observation-text').textContent = data.observation;
                 document.getElementById('ai-section').classList.remove('hidden');
@@ -733,7 +734,7 @@
             button.disabled = true;
             
             try {
-                const response = await fetch('/.netlify/functions/refine-observation', {
+                const response = await fetch('/.netlify/functions/claude-proxy', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
