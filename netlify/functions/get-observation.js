@@ -1,3 +1,5 @@
+// netlify/functions/get-observation.js
+
 exports.handler = async (event, context) => {
     // CORS headers
     const headers = {
