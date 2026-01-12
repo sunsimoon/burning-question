@@ -688,41 +688,41 @@
         }
 
         async function getAIObservation() {
-            const button = document.getElementById('ai-button');
-            const originalText = button.textContent;
-            button.textContent = 'Getting observations...';
-            button.disabled = true;
-            
-            try {
-                const response = await fetch('/.netlify/functions/claude-proxy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-    model: 'claude-3-5-sonnet-20241022',
-    max_tokens: 300,
-    messages: [{
-        role: 'user',
-        content: `Previous observation: ${aiObservations[currentStep]}\n\nUser wants to refine with: ${refinementText}\n\nProvide a refined observation based on this feedback.`
-    }]
-})
-                });
-                
-                if (!response.ok) throw new Error('Failed to get observation');
-                
-                const data = await response.json();
-                aiObservations[currentStep] = data.content[0].text;
-                
-                document.getElementById('ai-observation-text').textContent = data.observation;
-                document.getElementById('ai-section').classList.remove('hidden');
-                
-            } catch (error) {
-                console.error('Error getting AI observation:', error);
-                alert('Unable to get AI observation at this time. You can continue without it.');
-            } finally {
-                button.textContent = originalText;
-                button.disabled = false;
-            }
-        }
+    const button = document.getElementById('ai-button');
+    const originalText = button.textContent;
+    button.textContent = 'Getting observations...';
+    button.disabled = true;
+    
+    try {
+        const response = await fetch('/.netlify/functions/claude-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: 'claude-3-5-sonnet-20241022',
+                max_tokens: 300,
+                messages: [{
+                    role: 'user',
+                    content: `You're helping someone find their burning question. Current step ${currentStep}: ${STEPS[currentStep - 1].title}\n\nUser's response: ${document.getElementById('response-input').value}\n\nProvide a brief, insightful observation (2-3 sentences) that helps them see something valuable about their response. Be warm but not overly familiar, insightful but not presumptuous.`
+                }]
+            })
+        });
+        
+        if (!response.ok) throw new Error('Failed to get observation');
+        
+        const data = await response.json();
+        aiObservations[currentStep] = data.content[0].text;
+        
+        document.getElementById('ai-observation-text').textContent = data.content[0].text;
+        document.getElementById('ai-section').classList.remove('hidden');
+        
+    } catch (error) {
+        console.error('Error getting AI observation:', error);
+        alert('Unable to get AI observation at this time. You can continue without it.');
+    } finally {
+        button.textContent = originalText;
+        button.disabled = false;
+    }
+}
 
         async function refineObservation() {
             const refinementText = document.getElementById('refinement-input').value.trim();
