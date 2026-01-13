@@ -1,5 +1,4 @@
-const fetch = require('node-fetch');
-
+// Using native fetch - no dependencies needed!
 exports.handler = async function(event, context) {
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
@@ -54,7 +53,7 @@ exports.handler = async function(event, context) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: body.model || 'claude-3-5-sonnet-20241022',
+        model: body.model || 'claude-sonnet-4-20250514',
         max_tokens: body.max_tokens || 500,
         messages: body.messages
       })
