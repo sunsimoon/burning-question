@@ -1,3 +1,4 @@
+// Version 2.0 - Diagnostic logging enabled
 // Using native fetch - no dependencies needed!
 exports.handler = async function(event, context) {
   // Handle CORS preflight
@@ -43,7 +44,17 @@ exports.handler = async function(event, context) {
   try {
     const body = JSON.parse(event.body);
     
-    console.log('Proxying request to Anthropic API');
+    const requestPayload = {
+      model: body.model || 'claude-3-5-sonnet-20241022',
+      max_tokens: body.max_tokens || 500,
+      messages: body.messages
+    };
+    
+    console.log('=== SENDING TO ANTHROPIC ===');
+    console.log('Model:', requestPayload.model);
+    console.log('Max tokens:', requestPayload.max_tokens);
+    console.log('Messages:', JSON.stringify(requestPayload.messages, null, 2));
+    console.log('===========================');
     
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -52,16 +63,21 @@ exports.handler = async function(event, context) {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify({
-        model: body.model || 'claude-sonnet-4-20250514',
-        max_tokens: body.max_tokens || 500,
-        messages: body.messages
-      })
+      body: JSON.stringify(requestPayload)
     });
 
     const data = await response.json();
     
-    console.log('API response status:', response.status);
+    // Comprehensive logging
+    console.log('=== FULL API RESPONSE ===');
+    console.log('Status:', response.status);
+    console.log('Status Text:', response.statusText);
+    console.log('Response Data:', JSON.stringify(data, null, 2));
+    console.log('========================');
+    
+    if (!response.ok) {
+      console.error('ERROR - Full error object:', JSON.stringify(data, null, 2));
+    }
 
     return {
       statusCode: response.status,
