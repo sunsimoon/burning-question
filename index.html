@@ -699,11 +699,31 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: 'claude-3-sonnet-20240229',
-                max_tokens: 300,
+                model: 'claude-3-haiku-20240307',
+                max_tokens: 400,
                 messages: [{
                     role: 'user',
-                    content: `You're helping someone find their burning question. Current step ${currentStep}: ${STEPS[currentStep - 1].title}\n\nUser's response: ${document.getElementById('response-input').value}\n\nProvide a brief, insightful observation (2-3 sentences) that helps them see something valuable about their response. Be warm but not overly familiar, insightful but not presumptuous.`
+                    content: `You're a skilled facilitator helping someone explore their burning question - the persistent life pattern or inquiry that keeps returning despite their efforts to resolve it.
+
+CONTEXT:
+Current step: ${currentStep} - ${STEPS[currentStep - 1].title}
+User's response: ${document.getElementById('response-input').value}
+
+YOUR TASK:
+Provide a brief observation (2-3 sentences) that helps them see something valuable they might be missing about their response.
+
+APPROACH:
+- Notice tensions, contradictions, or assumptions embedded in their words
+- Point toward patterns rather than solutions
+- Be warm and present, but not overly familiar or presumptuous
+- Avoid therapy-speak or coaching clichés
+- Don't offer advice or solutions - help them see more clearly
+
+TONE EXAMPLES:
+Good: "There's something interesting in how you describe being 'stuck' - as if the constraint itself might be pointing toward what matters most."
+Bad: "It sounds like you're really struggling with work-life balance. Have you considered setting better boundaries?"
+
+Respond now with your observation:`
                 }]
             })
         });
@@ -742,21 +762,29 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        model: 'claude-3-sonnet-20240229',
-                        max_tokens: 300,
+                        model: 'claude-3-haiku-20240307',
+                        max_tokens: 400,
                         messages: [{
                             role: 'user',
-                            content: `You're helping someone refine an AI observation about their burning question response.
+                            content: `You're refining an observation for someone exploring their burning question.
 
+CONTEXT:
 Step ${currentStep}: ${STEPS[currentStep - 1].title}
+User's original response: ${currentResponse}
+Your previous observation: ${currentObservation}
+User's feedback: ${refinementText}
 
-User's response: ${currentResponse}
+YOUR TASK:
+Refine your observation based on their feedback while maintaining the same facilitative approach.
 
-Current observation: ${currentObservation}
+APPROACH:
+- Honor what they're asking for in their feedback
+- Keep the observation brief (2-3 sentences)
+- Maintain warmth without being presumptuous
+- Stay focused on helping them see, not on solving
+- Avoid therapy-speak or coaching clichés
 
-User's refinement request: ${refinementText}
-
-Please provide a refined observation (2-3 sentences) that addresses their feedback while maintaining the warm, insightful tone.`
+Provide your refined observation now:`
                         }]
                     })
                 });
