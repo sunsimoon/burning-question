@@ -53,7 +53,7 @@ exports.handler = async function(event, context) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: body.model || 'claude-3-5-sonnet-20241022',
+        model: body.model || 'claude-3-5-sonnet-20240620',
         max_tokens: body.max_tokens || 500,
         messages: body.messages
       })
@@ -62,6 +62,9 @@ exports.handler = async function(event, context) {
     const data = await response.json();
     
     console.log('API response status:', response.status);
+    if (!response.ok) {
+      console.error('Anthropic API error:', JSON.stringify(data));
+    }
 
     return {
       statusCode: response.status,
