@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -734,26 +735,39 @@
             button.disabled = true;
             
             try {
+                const currentResponse = responses[currentStep] || document.getElementById('response-input').value;
+                const currentObservation = aiObservations[currentStep];
+                
                 const response = await fetch('/.netlify/functions/claude_proxy', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        step: currentStep,
-                        stepTitle: STEPS[currentStep - 1].title,
-                        currentResponse: responses[currentStep] || document.getElementById('response-input').value,
-                        currentObservation: aiObservations[currentStep],
-                        refinementFeedback: refinementText,
-                        previousResponses: responses
+                        model: 'claude-sonnet-4-20250514',
+                        max_tokens: 300,
+                        messages: [{
+                            role: 'user',
+                            content: `You're helping someone refine an AI observation about their burning question response.
+
+Step ${currentStep}: ${STEPS[currentStep - 1].title}
+
+User's response: ${currentResponse}
+
+Current observation: ${currentObservation}
+
+User's refinement request: ${refinementText}
+
+Please provide a refined observation (2-3 sentences) that addresses their feedback while maintaining the warm, insightful tone.`
+                        }]
                     })
                 });
                 
                 if (!response.ok) throw new Error('Failed to refine observation');
                 
                 const data = await response.json();
-                aiObservations[currentStep] = data.refinedObservation;
+                aiObservations[currentStep] = data.content[0].text;
                 refinements[currentStep] = refinementText;
                 
-                document.getElementById('ai-observation-text').textContent = data.refinedObservation;
+                document.getElementById('ai-observation-text').textContent = data.content[0].text;
                 document.getElementById('refinement-input').value = '';
                 
             } catch (error) {
