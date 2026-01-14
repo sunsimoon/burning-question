@@ -221,7 +221,7 @@
         }
 
         .ai-observation {
-            background: linear-gradient(135deg, var(--accent-light) 0%, var(--bg-main) 100%);
+            background: #FDFCFB; /* Just the warm ivory - no gradient */
             border-left: 4px solid var(--accent);
             border-radius: 12px;
             padding: 1.5rem;
@@ -695,6 +695,22 @@
     button.disabled = true;
     
     try {
+        // Build cumulative context from previous steps
+        let previousContext = '';
+        if (currentStep > 1) {
+            previousContext = '\n\nPREVIOUS STEPS:\n';
+            for (let i = 1; i < currentStep; i++) {
+                previousContext += `\nStep ${i}: ${STEPS[i - 1].title}\n`;
+                if (responses[i]) {
+                    previousContext += `Response: ${responses[i]}\n`;
+                }
+                if (aiObservations[i]) {
+                    previousContext += `Your observation: ${aiObservations[i]}\n`;
+                }
+            }
+            previousContext += '\n---\n';
+        }
+        
         const response = await fetch('/.netlify/functions/claude_proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -703,18 +719,18 @@
                 max_tokens: 400,
                 messages: [{
                     role: 'user',
-                    content: `You're a skilled facilitator helping someone explore their burning question - the persistent life pattern or inquiry that keeps returning despite their efforts to resolve it.
+                    content: `You're a skilled facilitator helping someone explore their burning question - the persistent life pattern or inquiry that keeps returning despite their efforts to resolve it.${previousContext}
 
-CONTEXT:
-Current step: ${currentStep} - ${STEPS[currentStep - 1].title}
+CURRENT STEP:
+Step ${currentStep}: ${STEPS[currentStep - 1].title}
 User's response: ${document.getElementById('response-input').value}
 
 YOUR TASK:
-Provide a brief observation (2-3 sentences) that helps them see something valuable they might be missing about their response.
+Provide a brief observation (2-3 sentences) that helps them see something valuable they might be missing about their response.${currentStep > 1 ? ' Look for patterns or connections with what they\'ve shared in previous steps.' : ''}
 
 APPROACH:
 - Notice tensions, contradictions, or assumptions embedded in their words
-- Point toward patterns rather than solutions
+- Point toward patterns rather than solutions${currentStep > 1 ? '\n- Notice echoes or shifts from their earlier responses' : ''}
 - Be warm and present, but not overly familiar or presumptuous
 - Avoid therapy-speak or coaching clichés
 - Don't offer advice or solutions - help them see more clearly
@@ -758,6 +774,22 @@ Respond now with your observation:`
                 const currentResponse = responses[currentStep] || document.getElementById('response-input').value;
                 const currentObservation = aiObservations[currentStep];
                 
+                // Build cumulative context from previous steps
+                let previousContext = '';
+                if (currentStep > 1) {
+                    previousContext = '\n\nPREVIOUS STEPS:\n';
+                    for (let i = 1; i < currentStep; i++) {
+                        previousContext += `\nStep ${i}: ${STEPS[i - 1].title}\n`;
+                        if (responses[i]) {
+                            previousContext += `Response: ${responses[i]}\n`;
+                        }
+                        if (aiObservations[i]) {
+                            previousContext += `Your observation: ${aiObservations[i]}\n`;
+                        }
+                    }
+                    previousContext += '\n---\n';
+                }
+                
                 const response = await fetch('/.netlify/functions/claude_proxy', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -766,9 +798,9 @@ Respond now with your observation:`
                         max_tokens: 400,
                         messages: [{
                             role: 'user',
-                            content: `You're refining an observation for someone exploring their burning question.
+                            content: `You're refining an observation for someone exploring their burning question.${previousContext}
 
-CONTEXT:
+CURRENT STEP:
 Step ${currentStep}: ${STEPS[currentStep - 1].title}
 User's original response: ${currentResponse}
 Your previous observation: ${currentObservation}
