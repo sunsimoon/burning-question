@@ -45,7 +45,7 @@ exports.handler = async function(event, context) {
     const body = JSON.parse(event.body);
     
     const requestPayload = {
-      model: body.model || 'claude-3-5-sonnet-20241022',
+      model: body.model || 'claude-sonnet-4-20250514',
       max_tokens: body.max_tokens || 500,
       messages: body.messages
     };
