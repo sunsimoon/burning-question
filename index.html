@@ -287,6 +287,21 @@
             margin-left: 1rem;
             border-radius: 8px;
             font-size: 0.95rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .summary-refinement {
+            font-style: italic;
+            color: var(--text-muted);
+            padding: 0.75rem 1rem;
+            margin-left: 1rem;
+            border-left: 2px solid var(--accent-light);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .summary-ai-section {
+            margin-bottom: 1rem;
         }
 
         .email-section {
@@ -520,6 +535,11 @@
                 
                 <div class="burning-question" id="burning-question-display"></div>
                 
+                <div class="checkbox-container" style="margin: 1.5rem 0;">
+                    <input type="checkbox" id="show-ai-observations" onchange="toggleAIObservations()">
+                    <label for="show-ai-observations">Show AI observations in summary</label>
+                </div>
+                
                 <div class="summary-section" id="summary-content"></div>
                 
                 <div class="email-section">
@@ -546,7 +566,7 @@
                 <!-- Form Backup -->
                 <div class="form-backup">
                     <h3>Having trouble with email? Use this form instead:</h3>
-                    <form name="burning-question" method="POST" data-netlify="true">
+                    <form name="burning-question" method="POST" data-netlify="true" onsubmit="return handleFormSubmit(event)">
                         <input type="hidden" name="form-name" value="burning-question">
                         <input type="email" name="email" placeholder="Your email (optional)">
                         <textarea name="responses" id="form-responses" style="display: none;"></textarea>
@@ -554,7 +574,7 @@
                             <input type="checkbox" id="wants-feedback" name="wants-feedback">
                             <label for="wants-feedback">I'd like Simon to respond with potential coaching insights</label>
                         </div>
-                        <button type="submit" class="primary-button" onclick="prepareFormSubmission()">Submit via Form</button>
+                        <button type="submit" class="primary-button">Submit via Form</button>
                     </form>
                 </div>
             </div>
@@ -594,7 +614,7 @@
         // State management
         let currentStep = 1;
         let responses = {};
-        let aiObservations = {};
+        let aiObservations = {}; // Now stores arrays: { stepNum: [{type: 'observation', text: '...'}, {type: 'request', text: '...'}, ...] }
         let refinements = {};
 
         // Breadcrumb toggle
@@ -704,8 +724,13 @@
                 if (responses[i]) {
                     previousContext += `Response: ${responses[i]}\n`;
                 }
-                if (aiObservations[i]) {
-                    previousContext += `Your observation: ${aiObservations[i]}\n`;
+                if (aiObservations[i] && aiObservations[i].length > 0) {
+                    // Include full conversation thread from previous steps
+                    aiObservations[i].forEach(turn => {
+                        if (turn.type === 'observation') {
+                            previousContext += `Your observation: ${turn.text}\n`;
+                        }
+                    });
                 }
             }
             previousContext += '\n---\n';
@@ -747,9 +772,20 @@ Respond now with your observation:`
         if (!response.ok) throw new Error('Failed to get observation');
         
         const data = await response.json();
-        aiObservations[currentStep] = data.content[0].text;
         
-        document.getElementById('ai-observation-text').textContent = data.content[0].text;
+        // Initialize array if needed
+        if (!aiObservations[currentStep]) {
+            aiObservations[currentStep] = [];
+        }
+        
+        // Add new observation to conversation thread
+        aiObservations[currentStep].push({
+            type: 'observation',
+            text: data.content[0].text
+        });
+        
+        // Display full conversation thread
+        displayConversationThread();
         document.getElementById('ai-section').classList.remove('hidden');
         
     } catch (error) {
@@ -760,6 +796,39 @@ Respond now with your observation:`
         button.disabled = false;
     }
 }
+
+        function displayConversationThread() {
+            const container = document.getElementById('ai-observation-text');
+            const thread = aiObservations[currentStep] || [];
+            
+            if (thread.length === 0) {
+                container.textContent = '';
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            thread.forEach((turn, index) => {
+                const turnDiv = document.createElement('div');
+                turnDiv.style.marginBottom = index < thread.length - 1 ? '1rem' : '0';
+                
+                if (turn.type === 'observation') {
+                    turnDiv.style.color = 'var(--text-secondary)';
+                    turnDiv.style.lineHeight = '1.6';
+                    turnDiv.textContent = turn.text;
+                } else if (turn.type === 'request') {
+                    turnDiv.style.fontStyle = 'italic';
+                    turnDiv.style.color = 'var(--text-muted)';
+                    turnDiv.style.fontSize = '0.9em';
+                    turnDiv.style.padding = '0.5rem 0';
+                    turnDiv.style.borderLeft = '2px solid var(--accent-light)';
+                    turnDiv.style.paddingLeft = '0.75rem';
+                    turnDiv.textContent = `You asked: "${turn.text}"`;
+                }
+                
+                container.appendChild(turnDiv);
+            });
+        }
 
         async function refineObservation() {
             const refinementText = document.getElementById('refinement-input').value.trim();
@@ -772,7 +841,10 @@ Respond now with your observation:`
             
             try {
                 const currentResponse = responses[currentStep] || document.getElementById('response-input').value;
-                const currentObservation = aiObservations[currentStep];
+                
+                // Get the most recent observation from the thread
+                const thread = aiObservations[currentStep] || [];
+                const currentObservation = thread.length > 0 ? thread[thread.length - 1].text : '';
                 
                 // Build cumulative context from previous steps
                 let previousContext = '';
@@ -783,8 +855,12 @@ Respond now with your observation:`
                         if (responses[i]) {
                             previousContext += `Response: ${responses[i]}\n`;
                         }
-                        if (aiObservations[i]) {
-                            previousContext += `Your observation: ${aiObservations[i]}\n`;
+                        if (aiObservations[i] && aiObservations[i].length > 0) {
+                            aiObservations[i].forEach(turn => {
+                                if (turn.type === 'observation') {
+                                    previousContext += `Your observation: ${turn.text}\n`;
+                                }
+                            });
                         }
                     }
                     previousContext += '\n---\n';
@@ -824,10 +900,23 @@ Provide your refined observation now:`
                 if (!response.ok) throw new Error('Failed to refine observation');
                 
                 const data = await response.json();
-                aiObservations[currentStep] = data.content[0].text;
-                refinements[currentStep] = refinementText;
                 
-                document.getElementById('ai-observation-text').textContent = data.content[0].text;
+                // Add refinement request to thread
+                aiObservations[currentStep].push({
+                    type: 'request',
+                    text: refinementText
+                });
+                
+                // Add refined observation to thread
+                aiObservations[currentStep].push({
+                    type: 'observation',
+                    text: data.content[0].text
+                });
+                
+                refinements[currentStep] = refinementText; // Keep for backward compatibility
+                
+                // Display updated conversation thread
+                displayConversationThread();
                 document.getElementById('refinement-input').value = '';
                 
             } catch (error) {
@@ -857,8 +946,20 @@ Provide your refined observation now:`
                     summaryHTML += `
                         <div class="summary-step-title">Step ${i}: ${STEPS[i-1].title}</div>
                         <div class="summary-response">${responses[i]}</div>
-                        ${aiObservations[i] ? `<div class="summary-observation">AI Observation: ${aiObservations[i]}</div>` : ''}
                     `;
+                    
+                    // Add AI observations if they exist (with conversation thread)
+                    if (aiObservations[i] && aiObservations[i].length > 0) {
+                        summaryHTML += '<div class="summary-ai-section" style="display: none;">';
+                        aiObservations[i].forEach(turn => {
+                            if (turn.type === 'observation') {
+                                summaryHTML += `<div class="summary-observation">AI: ${turn.text}</div>`;
+                            } else if (turn.type === 'request') {
+                                summaryHTML += `<div class="summary-refinement">You asked: "${turn.text}"</div>`;
+                            }
+                        });
+                        summaryHTML += '</div>';
+                    }
                 }
             }
             
@@ -870,35 +971,71 @@ Provide your refined observation now:`
             document.getElementById('breadcrumb-nav').classList.add('hidden');
             document.getElementById('summary-screen').classList.remove('hidden');
         }
+        
+        function toggleAIObservations() {
+            const show = document.getElementById('show-ai-observations').checked;
+            const aiSections = document.querySelectorAll('.summary-ai-section');
+            aiSections.forEach(section => {
+                section.style.display = show ? 'block' : 'none';
+            });
+        }
 
         function buildEmailBody() {
             let body = "FIND YOUR BURNING QUESTION - Journey Summary\n\n";
             body += `My Burning Question: "${responses[4] || 'Not identified'}"\n\n`;
-            body += "=" .repeat(50) + "\n\n";
+            body += "=" .repeat(70) + "\n\n";
+            
+            // SECTION 1: Clean responses only (for Simon to form his own observations)
+            body += "SECTION 1: RAW RESPONSES\n";
+            body += "(Form your own observations before reading Section 2)\n\n";
+            body += "=" .repeat(70) + "\n\n";
             
             for (let i = 1; i <= STEPS.length; i++) {
                 if (responses[i]) {
                     body += `STEP ${i}: ${STEPS[i-1].title.toUpperCase()}\n`;
-                    body += "-".repeat(30) + "\n";
-                    body += `Response: ${responses[i]}\n\n`;
-                    
-                    if (aiObservations[i]) {
-                        body += `AI Observation: ${aiObservations[i]}\n\n`;
+                    body += "-".repeat(40) + "\n";
+                    body += `${responses[i]}\n\n\n`;
+                }
+            }
+            
+            // SECTION 2: Responses with AI conversation (if any AI observations exist)
+            const hasAnyAI = Object.values(aiObservations).some(obs => obs && obs.length > 0);
+            
+            if (hasAnyAI) {
+                body += "\n" + "=" .repeat(70) + "\n\n";
+                body += "SECTION 2: FULL JOURNEY WITH AI DIALOGUE\n";
+                body += "(See what the AI observed and how they refined it)\n\n";
+                body += "=" .repeat(70) + "\n\n";
+                
+                for (let i = 1; i <= STEPS.length; i++) {
+                    if (responses[i]) {
+                        body += `STEP ${i}: ${STEPS[i-1].title.toUpperCase()}\n`;
+                        body += "-".repeat(40) + "\n";
+                        body += `Response: ${responses[i]}\n\n`;
+                        
+                        // Include full conversation thread if it exists
+                        if (aiObservations[i] && aiObservations[i].length > 0) {
+                            body += "AI Conversation:\n";
+                            aiObservations[i].forEach(turn => {
+                                if (turn.type === 'observation') {
+                                    body += `  → AI: ${turn.text}\n\n`;
+                                } else if (turn.type === 'request') {
+                                    body += `  ↳ They asked: "${turn.text}"\n`;
+                                }
+                            });
+                        }
+                        
+                        body += "\n";
                     }
-                    
-                    if (refinements[i]) {
-                        body += `My refinement note: ${refinements[i]}\n\n`;
-                    }
-                    
-                    body += "\n";
                 }
             }
             
             // Add process reflection if present
             const reflection = document.getElementById('process-reflection').value.trim();
             if (reflection) {
+                body += "\n" + "=" .repeat(70) + "\n\n";
                 body += "PROCESS REFLECTION\n";
-                body += "-".repeat(30) + "\n";
+                body += "-".repeat(40) + "\n";
                 body += reflection + "\n\n";
             }
             
@@ -919,9 +1056,13 @@ Provide your refined observation now:`
             window.location.href = mailto;
         }
 
-        function prepareFormSubmission() {
+        function handleFormSubmit(event) {
+            event.preventDefault();
             const formResponses = buildEmailBody();
             document.getElementById('form-responses').value = formResponses;
+            // Now submit the form
+            event.target.submit();
+            return false;
         }
     </script>
 </body>
