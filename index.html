@@ -565,7 +565,11 @@
                 
                 <!-- Form Backup -->
                 <div class="form-backup">
-                    <h3>Having trouble with email? Use this form instead:</h3>
+                    <h3>Or use the form:</h3>
+                    <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        The email buttons will send your responses - perfect if you want to use your own email.<br>
+                        The form captures everything, including any AI conversations you had.
+                    </p>
                     <form name="burning-question" method="POST" data-netlify="true" onsubmit="return handleFormSubmit(event)">
                         <input type="hidden" name="form-name" value="burning-question">
                         <input type="email" name="email" placeholder="Your email (optional)">
@@ -980,7 +984,33 @@ Provide your refined observation now:`
             });
         }
 
-        function buildEmailBody() {
+        // Short version for mailto links (URL length limits)
+        function buildSimpleEmailBody() {
+            let body = "FIND YOUR BURNING QUESTION - Journey Summary\n\n";
+            body += `My Burning Question: "${responses[4] || 'Not identified'}"\n\n`;
+            body += "=" .repeat(50) + "\n\n";
+            
+            for (let i = 1; i <= STEPS.length; i++) {
+                if (responses[i]) {
+                    body += `STEP ${i}: ${STEPS[i-1].title.toUpperCase()}\n`;
+                    body += "-".repeat(30) + "\n";
+                    body += `${responses[i]}\n\n`;
+                }
+            }
+            
+            // Add process reflection if present
+            const reflection = document.getElementById('process-reflection').value.trim();
+            if (reflection) {
+                body += "\nPROCESS REFLECTION\n";
+                body += "-".repeat(30) + "\n";
+                body += reflection + "\n";
+            }
+            
+            return body;
+        }
+
+        // Full version for form submission (no URL length limits)
+        function buildFullEmailBody() {
             let body = "FIND YOUR BURNING QUESTION - Journey Summary\n\n";
             body += `My Burning Question: "${responses[4] || 'Not identified'}"\n\n`;
             body += "=" .repeat(70) + "\n\n";
@@ -1044,21 +1074,21 @@ Provide your refined observation now:`
 
         function emailToSimon() {
             const subject = "Burning Question Journey - Coaching Inquiry";
-            const body = buildEmailBody();
+            const body = buildSimpleEmailBody();  // Use simple version for mailto
             const mailto = `mailto:simonberkowitz@me.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
             window.location.href = mailto;
         }
 
         function emailToSelf() {
             const subject = "My Burning Question Journey";
-            const body = buildEmailBody();
+            const body = buildSimpleEmailBody();  // Use simple version for mailto
             const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
             window.location.href = mailto;
         }
 
         function handleFormSubmit(event) {
             event.preventDefault();
-            const formResponses = buildEmailBody();
+            const formResponses = buildFullEmailBody();  // Use full version for form
             document.getElementById('form-responses').value = formResponses;
             // Now submit the form
             event.target.submit();
