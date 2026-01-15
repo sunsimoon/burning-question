@@ -585,6 +585,14 @@
         </div>
     </div>
 
+    <!-- Hidden form for Netlify detection at build time -->
+    <form name="burning-question" method="POST" data-netlify="true" style="display: none;">
+        <input type="hidden" name="form-name" value="burning-question">
+        <input type="email" name="email">
+        <textarea name="responses"></textarea>
+        <input type="checkbox" name="wants-feedback">
+    </form>
+
     <script>
         // Configuration
         const STEPS = [
