@@ -570,12 +570,12 @@
                         The email buttons will send your responses - perfect if you want to use your own email.<br>
                         The form captures everything, including any AI conversations you had.
                     </p>
-                    <form name="burning-question" method="POST" data-netlify="true" onsubmit="return handleFormSubmit(event)">
+                    <form name="burning-question" method="POST" data-netlify="true" onsubmit="handleFormSubmit(event)">
                         <input type="hidden" name="form-name" value="burning-question">
                         <input type="email" name="email" placeholder="Your email (optional)">
                         <textarea name="responses" id="form-responses" style="display: none;"></textarea>
                         <div class="checkbox-container">
-                            <input type="checkbox" id="wants-feedback" name="wants-feedback">
+                            <input type="checkbox" id="wants-feedback" name="wants-feedback" value="yes">
                             <label for="wants-feedback">I'd like Simon to respond with potential coaching insights</label>
                         </div>
                         <button type="submit" class="primary-button">Submit via Form</button>
@@ -640,11 +640,23 @@
             
             for (let i = 1; i < currentStep; i++) {
                 if (responses[i]) {
+                    // Get the most recent AI observation from the thread
+                    let latestObservation = '';
+                    if (aiObservations[i] && aiObservations[i].length > 0) {
+                        // Find the last observation in the thread
+                        for (let j = aiObservations[i].length - 1; j >= 0; j--) {
+                            if (aiObservations[i][j].type === 'observation') {
+                                latestObservation = aiObservations[i][j].text;
+                                break;
+                            }
+                        }
+                    }
+                    
                     breadcrumbHTML += `
                         <div class="breadcrumb-step">
                             <div class="breadcrumb-step-title">Step ${i}: ${STEPS[i-1].title}</div>
                             <div class="breadcrumb-response">${responses[i]}</div>
-                            ${aiObservations[i] ? `<div class="breadcrumb-observation">AI: ${aiObservations[i]}</div>` : ''}
+                            ${latestObservation ? `<div class="breadcrumb-observation">AI: ${latestObservation}</div>` : ''}
                         </div>
                     `;
                 }
@@ -758,14 +770,15 @@ YOUR TASK:
 Provide a brief observation (2-3 sentences) that helps them see something valuable they might be missing about their response.${currentStep > 1 ? ' Look for patterns or connections with what they\'ve shared in previous steps.' : ''}
 
 APPROACH:
-- Notice tensions, contradictions, or assumptions embedded in their words
-- Point toward patterns rather than solutions${currentStep > 1 ? '\n- Notice echoes or shifts from their earlier responses' : ''}
+- Point to tensions, contradictions, or assumptions embedded in their words
+- Highlight patterns rather than solutions${currentStep > 1 ? '\n- Draw connections to their earlier responses when relevant' : ''}
 - Be warm and present, but not overly familiar or presumptuous
-- Avoid therapy-speak or coaching clichés
+- Avoid therapy-speak, coaching clichés, and formulaic openings
 - Don't offer advice or solutions - help them see more clearly
+- Vary your sentence openings - avoid starting with "I notice", "It seems", "There's something"
 
 TONE EXAMPLES:
-Good: "There's something interesting in how you describe being 'stuck' - as if the constraint itself might be pointing toward what matters most."
+Good: "The way you describe being 'stuck' - as if the constraint itself might be pointing toward what matters most."
 Bad: "It sounds like you're really struggling with work-life balance. Have you considered setting better boundaries?"
 
 Respond now with your observation:`
@@ -1087,12 +1100,10 @@ Provide your refined observation now:`
         }
 
         function handleFormSubmit(event) {
-            event.preventDefault();
+            // Just populate the hidden field, let Netlify handle the submission
             const formResponses = buildFullEmailBody();  // Use full version for form
             document.getElementById('form-responses').value = formResponses;
-            // Now submit the form
-            event.target.submit();
-            return false;
+            // Don't prevent default - let Netlify's form handler take over
         }
     </script>
 </body>
